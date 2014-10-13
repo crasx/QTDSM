@@ -16,7 +16,6 @@
 
 
 #include "QHLPing.h"
-#define QHLPINGDEBUG 1
 
 QHLPing::QHLPing(QString *ip, quint16 port)
 {
@@ -47,9 +46,6 @@ void QHLPing::testPing()
     datagram->insert(0, "\xFF\xFF\xFF\xFFTSource Engine Query");
     datagram->append('\0');
 
-    if(QHLPINGDEBUG)
-        qDebug()<<"S" << datagram->length()<<datagram->constData();
-
     udpSocket->writeDatagram(*datagram, *hostAddress, port);
 
     udpSocket->waitForReadyRead(-1);
@@ -65,18 +61,13 @@ void QHLPing::processPendingDatagrams()
 {
     QByteArray datagram;
 
-    qDebug()<<"RECV";
 
     do {
         datagram.resize(udpSocket->pendingDatagramSize());
         udpSocket->readDatagram(datagram.data(), datagram.size());
     } while (udpSocket->hasPendingDatagrams());
 
-
-    QString asd(datagram);
-    qDebug()<<asd.toLatin1()<<datagram.count();
-
-
+    //process returned data
     processPing(datagram.constData(), datagram.count());
 
 
@@ -109,8 +100,9 @@ void QHLPing::constructSocket()
  */
 void QHLPing::processPing(const char *data, int len)
 {
-    qDebug()<<"LL";
     int partLength=0;
+    int processedBytes=0; //used to prevent string overflow
+
     char type='\0';
     const char * dataPtr ;
 
@@ -120,139 +112,121 @@ void QHLPing::processPing(const char *data, int len)
 
     switch(type){
         case 'I': //info ping
-            HL_INFO_REPLY *reply = new HL_INFO_REPLY;
+
+            infoReplyMutex.lock();
+            infoReply = new HL_INFO_REPLY;
 
             if(len>6)
-                reply->protocol = data[5];
+                this->infoReply->protocol = data[5];
 
             //start copying data over c style
             dataPtr= data+6;
 
-            partLength = strlen(dataPtr);
-            reply->hostname = new char[partLength+1];
-            strcpy(reply->hostname, dataPtr);
-            reply->hostname[partLength]='\0';
-            qDebug() << reply->hostname;
+            processPingGrabString(this->infoReply->hostname, &dataPtr, len, &processedBytes);
 
-            dataPtr+= partLength+1;
+            processPingGrabString(this->infoReply->map, &dataPtr, len, &processedBytes);
 
-            partLength = strlen(dataPtr);
-            reply->map = new char[partLength+1];
-            strcpy(reply->map, dataPtr);
-            reply->map[partLength]='\0';
-            qDebug() << reply->map;
+            processPingGrabString(this->infoReply->game_directory, &dataPtr, len, &processedBytes);
 
-            dataPtr+= partLength+1;
+            processPingGrabString(this->infoReply->game_description, &dataPtr, len, &processedBytes);
 
-            partLength = strlen(dataPtr);
-            reply->game_directory = new char[partLength+1];
-            strcpy(reply->game_directory, dataPtr);
-            reply->game_directory[partLength]='\0';
-            qDebug() << reply->game_directory;
 
-            dataPtr+= partLength+1;
-
-            partLength = strlen(dataPtr);
-            reply->game_description= new char[partLength+1];
-            strcpy(reply->game_description, dataPtr);
-            reply->game_description[partLength]='\0';
-            qDebug() << reply->game_description;
-
-            dataPtr+= partLength+1;
-
-            reply->app_id = (unsigned short)
+            this->infoReply->app_id = (unsigned short)
                     ((unsigned char)dataPtr[1]) << 8 |
                     ((unsigned char)dataPtr[0]);
 
-            reply->num_players = dataPtr[2];
-            reply->max_players = dataPtr[3];
-            reply->num_of_bots = dataPtr[4];
-            reply->is_private = dataPtr[5];
-            reply->os = dataPtr[6];
-            reply->password = dataPtr[7];
-            reply->secure = dataPtr[8];
+            this->infoReply->num_players = dataPtr[2];
+            this->infoReply->max_players = dataPtr[3];
+            this->infoReply->num_of_bots = dataPtr[4];
+            this->infoReply->is_private = dataPtr[5];
+            this->infoReply->os = dataPtr[6];
+            this->infoReply->password = dataPtr[7];
+            this->infoReply->secure = dataPtr[8];
 
-            qDebug()<<reply->app_id<<reply->num_players<<reply->max_players<<reply->num_of_bots<<reply->is_private<<reply->os<<reply->password<<reply->secure;
+            qDebug()<<this->infoReply->app_id<<this->infoReply->num_players<<this->infoReply->max_players<<this->infoReply->num_of_bots<<this->infoReply->is_private<<this->infoReply->os<<this->infoReply->password<<this->infoReply->secure;
 
             dataPtr +=9;
+            processedBytes+=9;
 
-            if(reply->game_id == 2400){ // "the ship"
-                reply->ship_mode=dataPtr[0];
-                reply->ship_whitneses=dataPtr[1];
-                reply->ship_duration=dataPtr[2];
+            if(this->infoReply->game_id == 2400){ // "the ship"
+                this->infoReply->ship_mode=dataPtr[0];
+                this->infoReply->ship_whitneses=dataPtr[1];
+                this->infoReply->ship_duration=dataPtr[2];
                 dataPtr+=3;
+                processedBytes+=3;
             }
 
-            partLength = strlen(dataPtr);
-            reply->game_version= new char[partLength+1];
-            strcpy(reply->game_version, dataPtr);
-            reply->game_version[partLength]='\0';
-            qDebug() << reply->game_version;
+            processPingGrabString(this->infoReply->game_version, &dataPtr, len, &processedBytes);
 
-            dataPtr+= partLength+1;
-
-            reply->extra_data = dataPtr[0];
+            this->infoReply->extra_data = dataPtr[0];
             dataPtr++;
+            processedBytes++;
 
-            if(reply->extra_data & 0x80){ //extra data flag  - port
-                reply->port = (unsigned short)
+            if(this->infoReply->extra_data & 0x80){ //extra data flag  - port
+                this->infoReply->port = (unsigned short)
                         ((unsigned char)dataPtr[1]) << 8 |
                         ((unsigned char)dataPtr[0]);
                 dataPtr+=2;
+                processedBytes+=2;
             }
 
-            if(reply->extra_data & 0x10){ //extra data flag - steam id - 64 bits
-                reply->steamid = 0;
+            if(this->infoReply->extra_data & 0x10){ //extra data flag - steam id - 64 bits
+                this->infoReply->steamid = 0;
                 for(int i=0;i<8;i++){
-                    reply->steamid = reply->steamid | (((unsigned char)dataPtr[i]) << 8*i);
+                    this->infoReply->steamid = this->infoReply->steamid | (((unsigned char)dataPtr[i]) << 8*i);
                 }
 
                 dataPtr+=8;
-                qDebug()<<reply->steamid;
+                processedBytes+=8;
 
             }
 
-            if(reply->extra_data & 0x40){ //extra data flag - sourcetv, short and string
-                reply->sourcetv_port = (unsigned short)
+            if(this->infoReply->extra_data & 0x40){ //extra data flag - sourcetv, short and string
+                this->infoReply->sourcetv_port = (unsigned short)
                         ((unsigned char)dataPtr[1]) << 8 |
                         ((unsigned char)dataPtr[0]);
                 dataPtr+=2;
+                processedBytes+=2;
 
-                partLength = strlen(dataPtr);
-                reply->sourcetv_name= new char[partLength+1];
-                strcpy(reply->sourcetv_name, dataPtr);
-                reply->sourcetv_name[partLength]='\0';
-                dataPtr+=partLength+1;
+                processPingGrabString(this->infoReply->sourcetv_name, &dataPtr, len, &processedBytes);
 
             }
 
-            if(reply->extra_data & 0x20){ //extra data flag - keywords
+            if(this->infoReply->extra_data & 0x20){ //extra data flag - keywords
+                processPingGrabString(this->infoReply->keywords, &dataPtr, len, &processedBytes);
 
-                partLength = strlen(dataPtr);
-                reply->keywords = new char[partLength+1];
-                strcpy(reply->keywords, dataPtr);
-                reply->keywords[partLength]='\0';
-                dataPtr+=partLength+1;
-                qDebug()<<reply->keywords;
 
             }
 
-            if(reply->extra_data & 0x01){ //extra data flag - gameid, long long
-                reply->game_id = 0;
+            if(this->infoReply->extra_data & 0x01){ //extra data flag - gameid, long long
+                this->infoReply->game_id = 0;
                 for(int i=0;i<8;i++){
-                    reply->game_id = reply->game_id | (((unsigned char)dataPtr[i]) << 8*i);
+                    this->infoReply->game_id = this->infoReply->game_id | (((unsigned char)dataPtr[i]) << 8*i);
                 }
 
                 dataPtr+=8;
-                qDebug()<<reply->game_id;
-
+                processedBytes+=8;
 
             }
 
-
+            infoReplyMutex.unlock();
         break;
 
     }
 
+}
+
+void QHLPing::processPingGrabString(char *result, const char **dataPtr, int maxLength, int *processedBytes )
+{
+    if(*processedBytes >= maxLength)
+        return;
+
+    int partLength = strlen(*dataPtr);
+    result = new char[partLength+1];
+    strcpy(result, *dataPtr);
+    result[partLength]='\0';
+    *dataPtr+=partLength+1;
+    processedBytes += partLength+1;
+    qDebug()<<result;
 }
 

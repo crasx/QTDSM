@@ -17,6 +17,7 @@
 
 #include <QtNetwork/QUdpSocket>
 #include <QObject>
+#include <QMutex>
 #include "QHLPingStructs.h"
 
 
@@ -42,7 +43,10 @@ private slots:
 private:
     void constructSocket();
     void processPing(const char *data, int len);
+    void processPingGrabString(char *result, const char** dataPrt, int maxLength, int *processedBytes );
 
+    QMutex infoReplyMutex;
+    HL_INFO_REPLY *infoReply;
 
     QHostAddress *hostAddress;
     QUdpSocket* udpSocket;
