@@ -55,4 +55,11 @@ typedef struct
 }HL_INFO_REPLY;
 
 
+typedef struct{
+    char index;
+    char *name;
+    long score;
+    float time;
+} HL_PLAYER_INFO;
+
 #endif // QHLPINGSTRUCTS_H

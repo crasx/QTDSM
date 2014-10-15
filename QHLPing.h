@@ -34,24 +34,32 @@ public:
     QHLPing(QString * ip, quint16 port);
     QString* ToString();
 
-    void testPing();
+    void executeStatusPing();
+    void executePlayersPing();
 
 private slots:
     void processPendingDatagrams();
 
 
 private:
+
     void constructSocket();
     void processPing(const char *data, int len);
-    void processPingGrabString(char *result, const char** dataPrt, int maxLength, int *processedBytes );
+    void processPingGrabString(char *result, const char** dataPrt, int maxLength, int processedBytes );
+
+    void pingChallengeCallback(const char *data);
 
     QMutex infoReplyMutex;
+    QMutex playerReplyMutex;
+
     HL_INFO_REPLY *infoReply;
+    HL_PLAYER_INFO playerInfo[128];
 
     QHostAddress *hostAddress;
     QUdpSocket* udpSocket;
     QString* ipAddress;
     quint16 port;
+    int pingTimeoutMs;
 
 };
 
