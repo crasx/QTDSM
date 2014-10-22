@@ -18,6 +18,8 @@
 #include <QtNetwork/QUdpSocket>
 #include <QObject>
 #include <QMutex>
+#include <QTimer>
+#include <QElapsedTimer>
 #include "QHLPingStructs.h"
 
 
@@ -37,20 +39,34 @@ public:
     void executeStatusPing();
     void executePlayersPing();
 
+
+
+    int getPingTimeoutMs() const;
+    void setPingTimeoutMs(int value);
+
 private slots:
     void processPendingDatagrams();
+
+    void timerCallback();
 
 
 private:
 
     void constructSocket();
+    void constructPingTimer();
+
     void processPing(const char *data, int len);
     void processPingGrabString(char *result, const char** dataPrt, int maxLength, int processedBytes );
 
     void pingChallengeCallback(const char *data);
 
-    QMutex infoReplyMutex;
     QMutex playerReplyMutex;
+
+
+    QMutex infoReplyMutex;
+
+    QMutex pingMutex;
+    QElapsedTimer *pingTimer;
 
     HL_INFO_REPLY *infoReply;
     HL_PLAYER_INFO playerInfo[128];
@@ -58,6 +74,7 @@ private:
     QHostAddress *hostAddress;
     QUdpSocket* udpSocket;
     QString* ipAddress;
+    QTimer *timer;
     quint16 port;
     int pingTimeoutMs;
 

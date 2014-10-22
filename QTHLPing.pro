@@ -23,3 +23,6 @@ SOURCES += main.cpp \
 HEADERS += \
     QHLPingStructs.h \
     QHLPing.h
+
+OTHER_FILES += \
+    ui.qml

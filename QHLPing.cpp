@@ -21,11 +21,12 @@ QHLPing::QHLPing(QString *ip, quint16 port)
 {
     this->ipAddress = ip;
     this->port = port;
+    this->pingTimeoutMs = 1000;
     this->constructSocket();
-    this->pingTimeoutMs = 50000;
+    this->constructPingTimer();
+    this->pingTimer = new QElapsedTimer;
 
 }
-
 
 
 QString *QHLPing::ToString()
@@ -43,15 +44,20 @@ QString *QHLPing::ToString()
  */
 void QHLPing::executeStatusPing()
 {
+    this->pingMutex.lock();
 
     QByteArray *datagram = new QByteArray();
     datagram->insert(0, "\xFF\xFF\xFF\xFFTSource Engine Query");
     datagram->append('\0');
 
+    this->pingTimer->start();
     udpSocket->writeDatagram(*datagram, *hostAddress, port);
 
     udpSocket->waitForReadyRead(-1);
+    qint64 remainingTime = pingTimer->elapsed();
+    qDebug()<<remainingTime;
 
+    this->pingMutex.unlock();
 
 }
 /**
@@ -85,6 +91,16 @@ void QHLPing::pingChallengeCallback(const char *data)
 
 
 }
+int QHLPing::getPingTimeoutMs() const
+{
+    return pingTimeoutMs;
+}
+
+void QHLPing::setPingTimeoutMs(int value)
+{
+    pingTimeoutMs = value;
+}
+
 
 
 /**
@@ -109,6 +125,14 @@ void QHLPing::processPendingDatagrams()
 
 }
 
+void QHLPing::timerCallback()
+{
+    this->executeStatusPing();
+//    this->executePlayersPing();
+
+
+}
+
 /**
  * @brief QHLPing::constructSocket
  * Creates new socket and adds listeners
@@ -121,6 +145,23 @@ void QHLPing::constructSocket()
 
     //add event listener
     connect(udpSocket, SIGNAL(readyRead()), this, SLOT(processPendingDatagrams()));
+
+
+
+}
+
+/**
+ * @brief QHLPing::constructPingTimer
+ * creates ping timer to be used in continuious pinging
+ */
+void QHLPing::constructPingTimer()
+{
+    if(timer==NULL){
+        timer = new QTimer(this);
+        connect(timer, SIGNAL(timeout()), this, SLOT(timerCallback()));
+        timer->start(this->pingTimeoutMs);
+
+    }else timer->setInterval(this->pingTimeoutMs);
 
 
 
