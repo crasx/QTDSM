@@ -26,6 +26,8 @@ QHLPing::QHLPing(QString *ip, quint16 port)
     this->constructPingTimer();
     this->pingTimer = new QElapsedTimer;
 
+    this->infoReply = new HL_INFO_REPLY;
+
 }
 
 
@@ -53,10 +55,15 @@ void QHLPing::executeStatusPing()
     this->pingTimer->start();
     udpSocket->writeDatagram(*datagram, *hostAddress, port);
 
-    udpSocket->waitForReadyRead(-1);
-    qint64 remainingTime = pingTimer->elapsed();
-    qDebug()<<remainingTime;
+    if(udpSocket->waitForReadyRead(pingTimeoutMs)){
+        lastPingTime = pingTimer->elapsed();
+        totalPingTime+=lastPingTime;
+        totalPingCount++;
 
+
+    }else{
+//        qDebug()<<"Timeout";
+    }
     this->pingMutex.unlock();
 
 }
@@ -75,6 +82,15 @@ void QHLPing::executePlayersPing()
 
 
 
+}
+
+float QHLPing::getAveragePing()
+{
+
+    this->pingMutex.lock();
+    float r =  totalPingTime/totalPingCount;
+    this->pingMutex.unlock();
+    return r;
 }
 
 void QHLPing::pingChallengeCallback(const char *data)
@@ -117,7 +133,6 @@ void QHLPing::processPendingDatagrams()
         udpSocket->readDatagram(datagram.data(), datagram.size());
     } while (udpSocket->hasPendingDatagrams());
 
-    qDebug()<<datagram.constData();
     //process returned data
     processPing(datagram.constData(), datagram.count());
 
@@ -156,13 +171,9 @@ void QHLPing::constructSocket()
  */
 void QHLPing::constructPingTimer()
 {
-    if(timer==NULL){
-        timer = new QTimer(this);
-        connect(timer, SIGNAL(timeout()), this, SLOT(timerCallback()));
-        timer->start(this->pingTimeoutMs);
-
-    }else timer->setInterval(this->pingTimeoutMs);
-
+    timer = new QTimer(this);
+    connect(timer, SIGNAL(timeout()), this, SLOT(timerCallback()));
+    timer->start(this->pingTimeoutMs);
 
 
 }
@@ -187,7 +198,6 @@ void QHLPing::processPing(const char *data, int len)
         case 'I': //info ping
 
             infoReplyMutex.lock();
-            infoReply = new HL_INFO_REPLY;
 
             if(len>6)
                 this->infoReply->protocol = data[5];
@@ -195,13 +205,18 @@ void QHLPing::processPing(const char *data, int len)
             //start copying data over c style
             dataPtr= data+6;
 
-            processPingGrabString(this->infoReply->hostname, &dataPtr, len, data-dataPtr);
+//            processPingGrabString(this->infoReply->hostname, &dataPtr, len, data-dataPtr);
+            this->infoReply->hostname = dataPtr;
+            dataPtr+=this->infoReply->hostname.length()+1;
 
-            processPingGrabString(this->infoReply->map, &dataPtr, len, data-dataPtr);
+            this->infoReply->map = dataPtr;
+            dataPtr+=this->infoReply->map.length()+1;
 
-            processPingGrabString(this->infoReply->game_directory, &dataPtr, len, data-dataPtr);
+            this->infoReply->game_directory= dataPtr;
+            dataPtr+=this->infoReply->game_directory.length()+1;
 
-            processPingGrabString(this->infoReply->game_description, &dataPtr, len, data-dataPtr);
+            this->infoReply->game_description= dataPtr;
+            dataPtr+=this->infoReply->game_description.length()+1;
 
 
             this->infoReply->app_id = (unsigned short)
@@ -216,8 +231,6 @@ void QHLPing::processPing(const char *data, int len)
             this->infoReply->password = dataPtr[7];
             this->infoReply->secure = dataPtr[8];
 
-            qDebug()<<this->infoReply->app_id<<this->infoReply->num_players<<this->infoReply->max_players<<this->infoReply->num_of_bots<<this->infoReply->is_private<<this->infoReply->os<<this->infoReply->password<<this->infoReply->secure;
-
             dataPtr +=9;
 
             if(this->infoReply->game_id == 2400){ // "the ship"
@@ -227,7 +240,8 @@ void QHLPing::processPing(const char *data, int len)
                 dataPtr+=3;
             }
 
-            processPingGrabString(this->infoReply->game_version, &dataPtr, len, data-dataPtr);
+            this->infoReply->game_version= dataPtr;
+            dataPtr+=this->infoReply->game_version.length();
 
             this->infoReply->extra_data = dataPtr[0];
             dataPtr++;
@@ -255,12 +269,16 @@ void QHLPing::processPing(const char *data, int len)
                         ((unsigned char)dataPtr[0]);
                 dataPtr+=2;
 
-                processPingGrabString(this->infoReply->sourcetv_name, &dataPtr, len, data-dataPtr);
+                this->infoReply->sourcetv_name= dataPtr;
+                dataPtr+=this->infoReply->sourcetv_name.length()+1;
+
+
 
             }
 
             if(this->infoReply->extra_data & 0x20){ //extra data flag - keywords
-                processPingGrabString(this->infoReply->keywords, &dataPtr, len, data-dataPtr);
+                this->infoReply->keywords= dataPtr;
+                dataPtr+=this->infoReply->keywords.length()+1;
 
 
             }
@@ -276,6 +294,7 @@ void QHLPing::processPing(const char *data, int len)
             }
 
             infoReplyMutex.unlock();
+
         break;
     case 'A': //player challenge
         qDebug()<<len;
@@ -307,14 +326,10 @@ void QHLPing::processPing(const char *data, int len)
                 break;
 
 
-            int partLength = strlen(dataPtr);
 
-            //for some reason the pointer is inaccessible when passed to processPingGrabString... meh?
-            this->playerInfo[i].name = (char*)malloc(sizeof(char)*partLength+1);
-            strcpy(this->playerInfo[i].name , dataPtr);
-            this->playerInfo[i].name [partLength]='\0';
+            this->playerInfo[i].name =dataPtr;
+            dataPtr+=this->playerInfo[i].name.length()+1;
 
-            dataPtr+=partLength+1;
 
 
             this->playerInfo[i].score = *(long*)&dataPtr[0];
@@ -337,21 +352,5 @@ void QHLPing::processPing(const char *data, int len)
     }
 
 }
-
-void QHLPing::processPingGrabString(char *result, const char **dataPtr, int maxLength, int processedBytes )
-{
-    if(processedBytes >= maxLength)
-        return;
-
-    int partLength = strlen(*dataPtr);
-    result = (char *)malloc(sizeof(char) * (partLength+1));
-    strcpy(result, *dataPtr);
-    result[partLength]='\0';
-    *dataPtr+=partLength+1;
-
-//    qDebug()<<result;
-}
-
-
 
 

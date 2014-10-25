@@ -24,10 +24,10 @@
 typedef struct
 {
     char protocol;
-    char *hostname;
-    char *map;
-    char *game_directory;
-    char *game_description;
+    QString hostname;
+    QString map;
+    QString game_directory;
+    QString game_description;
     unsigned short app_id;
     unsigned char num_players ;
     unsigned char max_players;
@@ -36,7 +36,7 @@ typedef struct
     char os;
     bool password;
     bool secure;
-    char *game_version;
+    QString game_version;
 
     //special ship stuff (id 2400)
     char ship_mode;
@@ -48,16 +48,16 @@ typedef struct
     unsigned short port;
     unsigned long long steamid;
     short sourcetv_port;
-    char *sourcetv_name;
+    QString sourcetv_name;
 
-    char *keywords;
+    QString keywords;
     unsigned long long game_id;
 }HL_INFO_REPLY;
 
 
 typedef struct{
     char index;
-    char *name;
+    QString name;
     long score;
     float time;
 } HL_PLAYER_INFO;

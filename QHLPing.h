@@ -16,18 +16,17 @@
 
 
 #include <QtNetwork/QUdpSocket>
-#include <QObject>
 #include <QMutex>
 #include <QTimer>
 #include <QElapsedTimer>
 #include "QHLPingStructs.h"
-
+#include "QBasePing.h"
 
 #ifndef QHLPING_H
 #define QHLPING_H
 
 
-class QHLPing : public QObject
+class QHLPing : public QBasePing
 {
     Q_OBJECT
 
@@ -39,7 +38,7 @@ public:
     void executeStatusPing();
     void executePlayersPing();
 
-
+    float getAveragePing();
 
     int getPingTimeoutMs() const;
     void setPingTimeoutMs(int value);
@@ -56,7 +55,6 @@ private:
     void constructPingTimer();
 
     void processPing(const char *data, int len);
-    void processPingGrabString(char *result, const char** dataPrt, int maxLength, int processedBytes );
 
     void pingChallengeCallback(const char *data);
 
@@ -74,9 +72,13 @@ private:
     QHostAddress *hostAddress;
     QUdpSocket* udpSocket;
     QString* ipAddress;
-    QTimer *timer;
+    QTimer* timer;
     quint16 port;
     int pingTimeoutMs;
+
+    quint64 totalPingTime;
+    int totalPingCount;
+    int lastPingTime;
 
 };
 
