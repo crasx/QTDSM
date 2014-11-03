@@ -33,15 +33,13 @@ class QHLPing : public QBasePing
 public:
     QHLPing();
     QHLPing(QString * ip, quint16 port);
-    QString* ToString();
 
     void executeStatusPing();
     void executePlayersPing();
 
+    QString* ToString();
     float getAveragePing();
 
-    int getPingTimeoutMs() const;
-    void setPingTimeoutMs(int value);
 
 private slots:
     void processPendingDatagrams();
@@ -74,7 +72,6 @@ private:
     QString* ipAddress;
     QTimer* timer;
     quint16 port;
-    int pingTimeoutMs;
 
     quint64 totalPingTime;
     int totalPingCount;

@@ -15,7 +15,7 @@
 //along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-#include "QHLPing.h"
+#include "pingers/QHLPing.h"
 
 QHLPing::QHLPing(QString *ip, quint16 port)
 {
@@ -25,6 +25,7 @@ QHLPing::QHLPing(QString *ip, quint16 port)
     this->constructSocket();
     this->constructPingTimer();
     this->pingTimer = new QElapsedTimer;
+    this->lastPingTime=-1;
 
     this->infoReply = new HL_INFO_REPLY;
 
@@ -46,7 +47,6 @@ QString *QHLPing::ToString()
  */
 void QHLPing::executeStatusPing()
 {
-    this->pingMutex.lock();
 
     QByteArray *datagram = new QByteArray();
     datagram->insert(0, "\xFF\xFF\xFF\xFFTSource Engine Query");
@@ -56,15 +56,17 @@ void QHLPing::executeStatusPing()
     udpSocket->writeDatagram(*datagram, *hostAddress, port);
 
     if(udpSocket->waitForReadyRead(pingTimeoutMs)){
+        qDebug()<<"RECV";
+        this->pingMutex.lock();
         lastPingTime = pingTimer->elapsed();
         totalPingTime+=lastPingTime;
         totalPingCount++;
+        this->pingMutex.unlock();
 
 
     }else{
 //        qDebug()<<"Timeout";
     }
-    this->pingMutex.unlock();
 
 }
 /**
@@ -86,10 +88,12 @@ void QHLPing::executePlayersPing()
 
 float QHLPing::getAveragePing()
 {
+    qDebug()<<"A";
+    if(lastPingTime==-1)
+         return 0.0;
+    qDebug()<<lastPingTime;
 
-    this->pingMutex.lock();
     float r =  totalPingTime/totalPingCount;
-    this->pingMutex.unlock();
     return r;
 }
 
@@ -107,18 +111,6 @@ void QHLPing::pingChallengeCallback(const char *data)
 
 
 }
-int QHLPing::getPingTimeoutMs() const
-{
-    return pingTimeoutMs;
-}
-
-void QHLPing::setPingTimeoutMs(int value)
-{
-    pingTimeoutMs = value;
-}
-
-
-
 /**
  * @brief QHLPing::processPendingDatagrams
  * Data recieved callback

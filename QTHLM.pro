@@ -22,18 +22,25 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp \
-    QHLPing.cpp \
-    QBasePing.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    ServerDisplay.cpp \
+    tablemodel.cpp\
+    pingers/QBasePing.cpp \
+    pingers/QHLPing.cpp
 
 HEADERS += \
-    QHLPingStructs.h \
-    QHLPing.h \
     QBasePing.h \
-    mainwindow.h
+    mainwindow.h \
+    ServerDisplay.h \
+    tablemodel.h \
+    pingers/QBasePing.h \
+    pingers/QHLPing.h \
+    pingers/QHLPingStructs.h \
+    pingers/includeAll.h
 
 OTHER_FILES += \
     ui.qml
 
 FORMS += \
-    mainwindow.ui
+    mainwindow.ui \
+    ServerDisplay.ui
